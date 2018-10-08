@@ -30,7 +30,7 @@ loader
     "images/treasureHunter.json"
   ])
   .on("progress", loadProgressHandler)
-  .load(setup_treasure);
+  .load(setup);
 
 function loadProgressHandler(loader, resource) {
 
@@ -45,47 +45,11 @@ function loadProgressHandler(loader, resource) {
   //console.log("loading: " + resource.name);
 }
 
-function setup_cat() {
-  console.log("setup");
-  let cat = new Sprite(
-    resources["images/cat.png"].texture
-  );
-
-  cat.x = 96;
-  cat.y = 96;
-  cat.anchor.x = 0.5;
-  cat.anchor.y = 0.5;
-  cat.rotation = 0.5;
-
-  app.stage.addChild(cat);
-}
-
-function setup_rocket() {
-  console.log("setup");
-  //Create the `tileset` sprite from the texture
-  let texture = TextureCache["images/tileset.png"];
-  //Create a rectangle object that defines the position and
-  //size of the sub-image you want to extract from the texture
-  //(`Rectangle` is an alias for `PIXI.Rectangle`)
-  let rectangle = new PIXI.Rectangle(192, 128, 64, 64);
-  //Tell the texture to use that rectangular section
-  texture.frame = rectangle;
-
-  //Create the sprite from the texture
-  let rocket = new Sprite(texture);
-  //Position the rocket sprite on the canvas
-  rocket.x = 32;
-  rocket.y = 32;
-
-  //Add the rocket to the stage
-  app.stage.addChild(rocket);
-}
-
 //Define variables that might be used in more
 //than one function
-let dungeon, explorer, treasure, door, textures;
+let dungeon, explorer, treasure, door, textures, state;
 
-function setup_treasure() {
+function setup() {
   //One way of using gameLoop
   //app.ticker.add(delta => gameLoop(delta));
 
@@ -104,6 +68,9 @@ function setup_treasure() {
 
   //Center the explorer vertically
   explorer.y = app.stage.height / 2 - explorer.height / 2;
+  explorer.vx = 0;
+  explorer.vy = 0;
+  
   app.stage.addChild(explorer);
 
   //3. Create an optional alias called `textures` for all the texture atlas
@@ -151,14 +118,78 @@ function setup_treasure() {
     //Add the blob sprite to the stage
     app.stage.addChild(blob);
   }
+
+  //Capture the keyboard arrow keys
+  let left = keyboard(37),
+      up = keyboard(38),
+      right = keyboard(39),
+      down = keyboard(40);
+
+  //Left arrow key `press` method
+  left.press = () => {
+    //Change the cat's velocity when the key is pressed
+    explorer.vx = -5;
+    explorer.vy = 0;
+  };
+
+  //Left arrow key `release` method
+  left.release = () => {
+    //If the left arrow has been released, and the right arrow isn't down,
+    //and the cat isn't moving vertically:
+    //Stop the cat
+    if (!right.isDown && explorer.vy === 0) {
+      explorer.vx = 0;
+    }
+  };
+
+  //Up
+  up.press = () => {
+    explorer.vy = -5;
+    explorer.vx = 0;
+  };
+  up.release = () => {
+    if (!down.isDown && explorer.vx === 0) {
+      explorer.vy = 0;
+    }
+  };
+
+  //Right
+  right.press = () => {
+    explorer.vx = 5;
+    explorer.vy = 0;
+  };
+  right.release = () => {
+    if (!left.isDown && explorer.vy === 0) {
+      explorer.vx = 0;
+    }
+  };
+
+  //Down
+  down.press = () => {
+    explorer.vy = 5;
+    explorer.vx = 0;
+  };
+  down.release = () => {
+    if (!up.isDown && explorer.vx === 0) {
+      explorer.vy = 0;
+    }
+  };
+
+  //Set the game state
+  state = play;
 }
 
 function gameLoop(delta){
   requestAnimationFrame(gameLoop);
-  //Move the explorer 1 pixel
+  if(state) {
+    state(delta)
+  }
+}
+
+function play(delta) {
   if (explorer) {
-    explorer.vx = 1;
     explorer.x += explorer.vx;
+    explorer.y += explorer.vy;
   }
 }
 
@@ -168,4 +199,41 @@ gameLoop();
 //The `randomInt` helper function
 function randomInt(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function keyboard(keyCode) {
+  let key = {};
+  key.code = keyCode;
+  key.isDown = false;
+  key.isUp = true;
+  key.press = undefined;
+  key.release = undefined;
+  //The `downHandler`
+  key.downHandler = event => {
+    if (event.keyCode === key.code) {
+      if (key.isUp && key.press) key.press();
+      key.isDown = true;
+      key.isUp = false;
+    }
+    event.preventDefault();
+  };
+
+  //The `upHandler`
+  key.upHandler = event => {
+    if (event.keyCode === key.code) {
+      if (key.isDown && key.release) key.release();
+      key.isDown = false;
+      key.isUp = true;
+    }
+    event.preventDefault();
+  };
+
+  //Attach event listeners
+  window.addEventListener(
+    "keydown", key.downHandler.bind(key), false
+  );
+  window.addEventListener(
+    "keyup", key.upHandler.bind(key), false
+  );
+  return key;
 }
