@@ -1,9 +1,10 @@
 {
-  "name": "pixi",
+  "name": "pixi-sandbox",
   "version": "1.0.0",
-  "description": "",
+  "description": "Sandbox for playing around with Pixi JS",
   "main": "index.js",
   "scripts": {
+    "start": "http-server",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "",
