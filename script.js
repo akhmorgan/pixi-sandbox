@@ -1,3 +1,7 @@
+import './node_modules/pixi.js/dist/pixi.js'
+// Recommended import style (below) doesn't seem to work.
+//import * as PIXI from './node_modules/pixi.js/dist/pixi.js'
+
 let type = "WebGL"
 if(!PIXI.utils.isWebGLSupported()){
   type = "canvas"
@@ -6,10 +10,14 @@ PIXI.utils.sayHello(type)
 
 //Aliases
 let Application = PIXI.Application,
+    Container = PIXI.Container,
     loader = PIXI.loader,
     resources = PIXI.loader.resources,
+    Graphics = PIXI.Graphics,
+    TextureCache = PIXI.utils.TextureCache,
     Sprite = PIXI.Sprite,
-    TextureCache = PIXI.utils.TextureCache;
+    Text = PIXI.Text,
+    TextStyle = PIXI.TextStyle;
 
 //Create a Pixi Application
 let app = new Application({
@@ -38,54 +46,98 @@ let state, explorer, treasure, blobs, chimes, exit, player, dungeon,
     door, healthBar, message, gameScene, gameOverScene, enemies,  textures;
 
 function setup() {
+  setupGameContainers();
   setupSprites();
+  setupHealthBar();
   setup_keyboard_controls();
   startGame();
+}
+
+function setupGameContainers() {
+  gameScene = new Container();
+  app.stage.addChild(gameScene);
+
+  gameOverScene = new Container();
+  app.stage.addChild(gameOverScene);
+
+  let style = new TextStyle({
+    fontFamily: "Futura",
+    fontSize: 64,
+    fill: "white"
+  });
+  message = new Text("The End!", style);
+  message.x = 120;
+  message.y = 224;
+  gameOverScene.addChild(message);
 }
 
 function setupSprites() {
   textures = PIXI.loader.resources["images/treasureHunter.json"].textures;
 
   dungeon = new Sprite(textures["dungeon.png"]);
-  app.stage.addChild(dungeon);
+  gameScene.addChild(dungeon);
 
   explorer = new Sprite(textures["explorer.png"]);
   explorer.x = 68;
   explorer.y = app.stage.height / 2 - explorer.height / 2;
   explorer.vx = 0;
   explorer.vy = 0;
-  app.stage.addChild(explorer);
+  gameScene.addChild(explorer);
 
   treasure = new Sprite(textures["treasure.png"]);
   treasure.x = app.stage.width - treasure.width - 48;
   treasure.y = app.stage.height / 2 - treasure.height / 2;
-  app.stage.addChild(treasure);
+  gameScene.addChild(treasure);
 
   door = new Sprite(textures["door.png"]);
   door.position.set(32, 0);
-  app.stage.addChild(door);
+  gameScene.addChild(door);
 
   let numberOfBlobs = 6,
       spacing = 48,
-      xOffset = 150;
+      xOffset = 150,
+      speed = 2,
+      direction = 1;
+  blobs = [];
 
   for (let i = 0; i < numberOfBlobs; i++) {
     let blob = new Sprite(textures["blob.png"]);
-    //Space each blob horizontally according to the `spacing` value.
-    //`xOffset` determines the point from the left of the screen
-    //at which the first blob should be added.
-    let x = spacing * i + xOffset;
-    //Give the blob a random y position
-    //(`randomInt` is a custom function - see below)
-    let y = randomInt(0, app.stage.height - blob.height);
+    blob.x = spacing * i + xOffset;;
+    blob.y = randomInt(0, app.stage.height - blob.height);
 
-    blob.x = x;
-    blob.y = y;
-    app.stage.addChild(blob);
+    blob.vy = speed * direction;
+    direction *= -1;
+
+    blobs.push(blob);
+    gameScene.addChild(blob);
   }
 }
 
+function setupHealthBar() {
+  //Create the health bar
+  healthBar = new Container();
+  healthBar.position.set(app.stage.width - 170, 4)
+  gameScene.addChild(healthBar);
+  //Create the black background rectangle
+  let innerBar = new PIXI.Graphics();
+  innerBar.beginFill(0x000000);
+  innerBar.drawRect(0, 0, 128, 8);
+  innerBar.endFill();
+  healthBar.addChild(innerBar);
+
+  //Create the front red rectangle
+  let outerBar = new PIXI.Graphics();
+  outerBar.beginFill(0xFF3300);
+  outerBar.drawRect(0, 0, 128, 8);
+  outerBar.endFill();
+  healthBar.addChild(outerBar);
+
+  healthBar.outer = outerBar;
+}
+
 function startGame() {
+  //hide game over screen
+  gameOverScene.visible = false;
   //Set the game state
   state = play;
   //start game loop
@@ -97,6 +149,56 @@ function gameLoop(delta){
   if(state) {
     state(delta)
   }
+}
+
+function play(delta) {
+  let explorerHit = false;
+
+  if (explorer) {
+    explorer.x += explorer.vx;
+    explorer.y += explorer.vy;
+    //Contain the explorer inside the area of the dungeon
+    contain(explorer, {x: 28, y: 10, width: 488, height: 480});
+  }
+  //Loop through all the sprites in the `enemies` array
+  blobs.forEach(function(blob) {
+    blob.y += blob.vy;
+    let blobHitsWall = contain(blob, {x: 28, y: 10, width: 488, height: 480});
+    if (blobHitsWall === "top" || blobHitsWall === "bottom") {
+      blob.vy *= -1;
+    }
+
+    if(hitTestRectangle(explorer, blob)) {
+      explorerHit = true;
+    }
+  });
+
+  if(explorerHit) {
+    explorer.alpha = 0.5;
+    healthBar.outer.width -= 1;
+  } else {
+    explorer.alpha = 1;
+  }
+
+  if (hitTestRectangle(explorer, treasure)) {
+    treasure.x = explorer.x + 8;
+    treasure.y = explorer.y + 8;
+  }
+
+  if (healthBar.outer.width <= 0) {
+    state = end;
+    message.text = "You lost!";
+  }
+
+  if (hitTestRectangle(treasure, door)) {
+    state = end;
+    message.text = "You won!";
+  }
+}
+
+function end() {
+  gameScene.visible = false;
+  gameOverScene.visible = true;
 }
 
 function setup_keyboard_controls() {
@@ -157,16 +259,41 @@ function setup_keyboard_controls() {
   };
 }
 
-function play(delta) {
-  if (explorer) {
-    explorer.x += explorer.vx;
-    explorer.y += explorer.vy;
-  }
-}
-
 //The `randomInt` helper function
 function randomInt(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function contain(sprite, container) {
+
+  let collision = undefined;
+
+  //Left
+  if (sprite.x < container.x) {
+    sprite.x = container.x;
+    collision = "left";
+  }
+
+  //Top
+  if (sprite.y < container.y) {
+    sprite.y = container.y;
+    collision = "top";
+  }
+
+  //Right
+  if (sprite.x + sprite.width > container.width) {
+    sprite.x = container.width - sprite.width;
+    collision = "right";
+  }
+
+  //Bottom
+  if (sprite.y + sprite.height > container.height) {
+    sprite.y = container.height - sprite.height;
+    collision = "bottom";
+  }
+
+  //Return the `collision` value
+  return collision;
 }
 
 //The `hitTestRectangle` function
