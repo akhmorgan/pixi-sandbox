@@ -4,7 +4,7 @@
   "description": "Sandbox for playing around with Pixi JS",
   "main": "index.js",
   "scripts": {
-    "start": "http-server",
+    "start": "http-server -o",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "",
