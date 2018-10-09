@@ -171,6 +171,13 @@ function play(delta) {
     if(hitTestRectangle(explorer, blob)) {
       explorerHit = true;
     }
+    if (hitTestRectangle(blob, treasure)) {
+      treasure.x = blob.x + 8;
+      treasure.y = blob.y + 8;
+    } else if (hitTestRectangle(explorer, treasure)) {
+      treasure.x = explorer.x + 8;
+      treasure.y = explorer.y + 8;
+    }
   });
 
   if(explorerHit) {
@@ -178,11 +185,6 @@ function play(delta) {
     healthBar.outer.width -= 1;
   } else {
     explorer.alpha = 1;
-  }
-
-  if (hitTestRectangle(explorer, treasure)) {
-    treasure.x = explorer.x + 8;
-    treasure.y = explorer.y + 8;
   }
 
   if (healthBar.outer.width <= 0) {
