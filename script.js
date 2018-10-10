@@ -42,8 +42,13 @@ function loadProgressHandler(loader, resource) {
   console.log("progress: " + loader.progress + "%");
 }
 
-let state, explorer, treasure, blobs, chimes, exit, player, dungeon,
+let state, explorer, treasure, treasure_base, blobs, chimes, exit, player, dungeon,
     door, healthBar, message, gameScene, gameOverScene, enemies,  textures;
+
+let spacing = 48,
+    xOffset = 130,
+    speed = 2,
+    direction = 1;
 
 function setup() {
   setupGameContainers();
@@ -84,6 +89,12 @@ function setupSprites() {
   explorer.vy = 0;
   gameScene.addChild(explorer);
 
+  treasure_base = new Sprite(textures["treasure.png"]);
+  treasure_base.x = app.stage.width - treasure_base.width - 48;
+  treasure_base.y = app.stage.height / 2 - treasure_base.height / 2;
+  treasure_base.visible = false;
+  gameScene.addChild(treasure_base);
+
   treasure = new Sprite(textures["treasure.png"]);
   treasure.x = app.stage.width - treasure.width - 48;
   treasure.y = app.stage.height / 2 - treasure.height / 2;
@@ -93,24 +104,34 @@ function setupSprites() {
   door.position.set(32, 0);
   gameScene.addChild(door);
 
-  let numberOfBlobs = 6,
-      spacing = 48,
-      xOffset = 150,
-      speed = 2,
-      direction = 1;
+  let numberOfBlobs = 6;
   blobs = [];
 
   for (let i = 0; i < numberOfBlobs; i++) {
     let blob = new Sprite(textures["blob.png"]);
-    blob.x = spacing * i + xOffset;;
-    blob.y = randomInt(0, app.stage.height - blob.height);
-
-    blob.vy = speed * direction;
-    direction *= -1;
-
+    resetEnemy(blob, speed, i);
     blobs.push(blob);
     gameScene.addChild(blob);
   }
+}
+
+function resetEnemy(enemy, speed, i) {
+  enemy.x = spacing * i + xOffset;;
+  enemy.y = randomInt(0, app.stage.height - enemy.height);
+  direction = i%2 ? 1:-1
+  enemy.vy = speed * direction;
+  enemy.vx = 0;
+  enemy.reset = true;
+  enemy.mad = false;
+}
+
+function setEnemyMad(enemy, speed, i) {
+  enemy.x = spacing * i + xOffset;;
+  enemy.y = randomInt(0, app.stage.height - enemy.height);
+  direction = i%2 ? 1:-1
+  enemy.vy = speed * direction;
+  enemy.vx = speed * direction;
+  enemy.mad = true;
 }
 
 function setupHealthBar() {
@@ -161,24 +182,47 @@ function play(delta) {
     contain(explorer, {x: 28, y: 10, width: 488, height: 480});
   }
   //Loop through all the sprites in the `enemies` array
-  blobs.forEach(function(blob) {
+  for (let i = 0; i < blobs.length; i++) {
+    let blob = blobs[i];
+    let blobHasTreasure = false;
     blob.y += blob.vy;
+    blob.x += blob.vx;
     let blobHitsWall = contain(blob, {x: 28, y: 10, width: 488, height: 480});
     if (blobHitsWall === "top" || blobHitsWall === "bottom") {
       blob.vy *= -1;
+    }
+    if (blobHitsWall === "left" || blobHitsWall === "right") {
+      blob.vx *= -1;
     }
 
     if(hitTestRectangle(explorer, blob)) {
       explorerHit = true;
     }
-    if (hitTestRectangle(blob, treasure)) {
+    if (hitTestRectangle(blob, treasure) && !blobHasTreasure) {
       treasure.x = blob.x + 8;
       treasure.y = blob.y + 8;
+      blobHasTreasure = true;
+
+      chase(blob, treasure_base, 0.05);
+      if (hitTestRectangle(treasure, treasure_base)){
+        setEnemyMad(blob, 2, i);
+        blobHasTreasure = false
+      }
     } else if (hitTestRectangle(explorer, treasure)) {
       treasure.x = explorer.x + 8;
       treasure.y = explorer.y + 8;
+
+      if (i == 0) {
+        chase(blob, explorer, 0.05);
+      } else if (!blob.mad) {
+        setEnemyMad(blob, 2, i);
+      }
+
+      blob.reset = false;
+    } else if (!blob.reset) {
+      resetEnemy(blob, 2, i);
     }
-  });
+  };
 
   if(explorerHit) {
     explorer.alpha = 0.5;
@@ -196,6 +240,48 @@ function play(delta) {
     state = end;
     message.text = "You won!";
   }
+}
+
+function chase(r1, r2, speed){
+  //Find the center points of each sprite
+  r1.centerX = r1.x + r1.width / 2;
+  r1.centerY = r1.y + r1.height / 2;
+  r2.centerX = r2.x + r2.width / 2;
+  r2.centerY = r2.y + r2.height / 2;
+
+  //Find the half-widths and half-heights of each sprite
+  r1.halfWidth = r1.width / 2;
+  r1.halfHeight = r1.height / 2;
+  r2.halfWidth = r2.width / 2;
+  r2.halfHeight = r2.height / 2;
+
+  //Calculate the distance vector between the sprites
+  let vx = r1.centerX - r2.centerX;
+  let vy = r1.centerY - r2.centerY;
+
+  r1.vy = 0;
+  r1.x -= vx*speed;
+  r1.y -= vy*speed;
+}
+
+function flee(r1, r2){
+  //Find the center points of each sprite
+  r1.centerX = r1.x + r1.width / 2;
+  r1.centerY = r1.y + r1.height / 2;
+  r2.centerX = r2.x + r2.width / 2;
+  r2.centerY = r2.y + r2.height / 2;
+
+  //Find the half-widths and half-heights of each sprite
+  r1.halfWidth = r1.width / 2;
+  r1.halfHeight = r1.height / 2;
+  r2.halfWidth = r2.width / 2;
+  r2.halfHeight = r2.height / 2;
+
+  //Calculate the distance vector between the sprites
+  let vx = r1.centerX - r2.centerX;
+  let vy = r1.centerY - r2.centerY;
+
+  r1.x += 1;
 }
 
 function end() {
